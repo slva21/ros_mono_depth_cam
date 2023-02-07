@@ -19,11 +19,15 @@ private:
     cv::Mat *img1;
     cv::Mat *img2;
     cv::Ptr<cv::DescriptorMatcher> matcher;
-    
 
     bool isGPU;
 
 public:
+    // DMatch.distance - Distance between descriptors. The lower, the better it is.
+    // DMatch.trainIdx - Index of the descriptor in train descriptors(1st image)
+    // DMatch.queryIdx - Index of the descriptor in query descriptors(2nd image)
+    // DMatch.imgIdx - Index of the train image.
+    
     std::vector<cv::DMatch> matches;
     // Define Discriptors and keypoints vectors
     cv::Mat descriptors1, descriptors2;
@@ -32,7 +36,7 @@ public:
 public:
     int compute()
     {
-        if (isGPU == true)
+        if (isGPU)
         {
             // Convert the images to grayscale on GPU
             cv::cuda::GpuMat gpuImg1, gpuImg2;
@@ -75,19 +79,27 @@ public:
         }
 
         // Match the two sets of descriptors
-       
+
         matcher->match(descriptors1, descriptors2, matches);
 
         return 1;
     }
 
-    orb(cv::Mat &_Img1, cv::Mat &_Img2, bool _isGPU)
+    orb(cv::Mat &_Img1, cv::Mat &_Img2)
     {
         img1 = &_Img1;
         img2 = &_Img2;
 
-        isGPU = _isGPU;
-
         matcher = cv::DescriptorMatcher::create("BruteForce-Hamming");
+
+        // Check if Cuda avialabe
+        if (cv::cuda::getCudaEnabledDeviceCount())
+        {
+            isGPU = true;
+        }
+        else
+        {
+            isGPU = false;
+        }
     }
 };

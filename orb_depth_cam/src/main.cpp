@@ -6,10 +6,22 @@ using namespace cv;
 cv::Mat img1;
 cv::Mat img2;
 
-orb feature_method(img1, img2, true);
+orb feature_method(img1, img2);
+
+// LMS lms;
 
 int main(int argc, char **argv)
 {
+
+    ros::init(argc, argv, "orb_depth_cam"); // Create node
+
+    cv::Mat src_img;
+    int loop_rate = 10;
+    ImagePublisher *p = new ImagePublisher("/camera/image", src_img, loop_rate); // create instances
+
+    // publisher_instances.push_back(p->imagePublisher_thread());  // Start thread
+
+    // publisher_instances[0].join();
 
     VideoCapture cap("v4l2src device=/dev/video0 ! video/x-raw,width=640, height=480,framerate=30/1 ! videoconvert ! video/x-raw,format=(string)BGR ! appsink", CAP_GSTREAMER);
     if (!cap.isOpened())
@@ -18,15 +30,39 @@ int main(int argc, char **argv)
         exit(-1);
     }
 
+    MIDAS::init();
+
+
     while (true)
     {
         // Load the two images
         // img1 = cv::imread("/home/vslam/catkin_ws/src/orb_depth_cam/images/1.png");
         // img2 = cv::imread("/home/vslam/catkin_ws/src/orb_depth_cam/images/2.png");
+
+    
+        auto t1 = getTickCount();
+
         cap.read(img1);
         cap.read(img2);
 
+        auto t2 = getTickCount();
+        auto delta = (t2 - t1) / getTickFrequency(); // time in seconds
+
+        cv::Mat relative_depth = MIDAS::compute(img2);
+
+        //  Find and match feature points using ORB
         feature_method.compute();
+
+        // calculate the ground_truth points using Ego Motion
+        std::vector<cv::KeyPoint> ground_truth_points = EGO_MOTION::evaluate_groundtruths(feature_method.matches, feature_method.keypoints1, feature_method.keypoints2, delta, 0.00367);
+
+        if (ground_truth_points.size() > 1)
+        {
+            // Optimise scale_factor using Levenberg-Marquardt algorithm
+            double scale = LMS_OPTIMSER::optimizeScale(relative_depth, ground_truth_points);
+
+            std::cout << scale << std::endl;
+        }
 
         // Draw the matches on an image
         cv::Mat img_matches;
@@ -34,80 +70,11 @@ int main(int argc, char **argv)
 
         // Display the result
         cv::imshow("Matches", img_matches);
+        cv::imshow("Relative Map", relative_depth);
 
         if (waitKey(1) == 's')
-                break;
-        
+            break;
     }
-   
+
     return 0;
 }
-
-// int main(int argc, char **argv)
-// {
-
-//     // Load the two images
-//     cv::Mat img1 = cv::imread("/home/vslam/catkin_ws/src/orb_depth_cam/images/1.png");
-//     cv::Mat img2 = cv::imread("/home/vslam/catkin_ws/src/orb_depth_cam/images/2.png");
-
-//     // Create a brute-force matcher object
-//     cv::Ptr<cv::DescriptorMatcher> matcher = cv::DescriptorMatcher::create("BruteForce-Hamming");
-
-//     // Define Discriptors and keypoints vectors
-//     cv::Mat descriptors1, descriptors2;
-//     std::vector<cv::KeyPoint> keypoints1, keypoints2;
-
-//     if(ORB_GPU == true){
-//         // Convert the images to grayscale on CPU
-//         cv::Mat greyMat1, greyMat2;
-//         cv::cvtColor(img1, greyMat1, cv::COLOR_BGR2GRAY);
-//         cv::cvtColor(img2, greyMat2, cv::COLOR_BGR2GRAY);
-
-//         // Define THE  ORB object
-//         cv::Ptr<cv::ORB> orb = cv::ORB::create();
-
-//         // Detect ORB features in the two images
-//         orb->detectAndCompute(img1, cv::Mat(), keypoints1, descriptors1);
-//         orb->detectAndCompute(img2, cv::Mat(), keypoints2, descriptors2);
-//     }
-//     else{
-//         // Convert the images to grayscale on GPU
-//         cv::cuda::GpuMat gpuImg1, gpuImg2;
-
-//         gpuImg1.upload(img1);
-//         gpuImg2.upload(img2);
-
-//         // Convert the images to grayscale
-//         cv::cuda::GpuMat greyMat1, greyMat2;
-//         cv::cuda::cvtColor(gpuImg1, greyMat1, cv::COLOR_BGR2GRAY);
-//         cv::cuda::cvtColor(gpuImg2, greyMat2, cv::COLOR_BGR2GRAY);
-
-//         // Define the ORB extractor
-//         cv::Ptr<cv::cuda::ORB> orb = cv::cuda::ORB::create();
-
-//         // Compute the keypoints and descriptors for both images
-//         cv::cuda::GpuMat descriptors1GPU, descriptors2GPU;
-
-//         orb->detectAndCompute(greyMat1, cv::cuda::GpuMat(), keypoints1, descriptors1GPU);
-//         orb->detectAndCompute(greyMat2, cv::cuda::GpuMat(), keypoints2, descriptors2GPU);
-
-//         // Convert the keypoints and descriptors from GPU to CPU memory
-
-//         cv::cuda::GpuMat(descriptors1GPU).download(descriptors1);
-//         cv::cuda::GpuMat(descriptors2GPU).download(descriptors2);
-//     }
-
-//     // Match the two sets of descriptors
-//     std::vector<cv::DMatch> matches;
-//     matcher->match(descriptors1, descriptors2, matches);
-
-//     // Draw the matches on an image
-//     // cv::Mat img_matches;
-//     // cv::drawMatches(img1, keypoints1, img2, keypoints2, matches, img_matches);
-
-//     // Display the result
-//     // cv::imshow("Matches", img_matches);
-//     // cv::waitKey(0);
-
-//     return 0;
-// }

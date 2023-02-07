@@ -7,6 +7,7 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}" ${CMAKE_MODULE_PATH})
 # Define project name
 project(orb_depth_cam)
 
+SET(CMAKE_EXE_LINKER_FLAGS "-lpthread")
 set(THREADS_HAVE_PTHREAD_ARG 1)
 set (CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -32,8 +33,6 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
 )
 ###
-
-
 
 # If the package has been found, several variables will
 # be set, you can find the full list with descriptions
